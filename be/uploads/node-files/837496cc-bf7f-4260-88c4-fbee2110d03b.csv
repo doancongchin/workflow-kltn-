@@ -1,0 +1,11 @@
+Mã hàng,Tên hàng,Tồn đầu kỳ,Nhập,Xuất,Tồn cuối kỳ,Ngưỡng cảnh báo
+CPU001,Intel Core i9-13900K,15,10,18,7,5
+VGA002,ASUS ROG RTX 4080,8,2,7,3,5
+RAM003,Corsair Vengeance 32GB,25,20,35,10,10
+SSD004,Samsung 990 Pro 1TB,40,15,20,35,15
+PSU005,Corsair RM1000x,12,5,14,3,5
+MAIN006,MSI MAG Z790 Tomahawk,10,8,5,13,4
+CASE007,NZXT H7 Flow,6,10,12,4,3
+FAN008,Noctua NF-A12x25,50,30,70,10,20
+COOL009,Deepcool AK620,18,10,15,13,5
+HDD010,Seagate IronWolf 4TB,20,0,18,2,8
