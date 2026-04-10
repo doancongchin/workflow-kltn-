@@ -35,7 +35,7 @@ const getId = () => `${idCounter++}`;
 
 export default function BuilderPage({ isAuthenticated }: { isAuthenticated: boolean }) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [workflowId, setWorkflowId] = useState<number | null>(null);
   const [workflowName, setWorkflowName] = useState('Inbound Lead Processor');
   const [isRunning, setIsRunning] = useState(false);
@@ -68,7 +68,7 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
   const [templateCategory, setTemplateCategory] = useState('');
   const [templateStatus, setTemplateStatus] = useState('Active');
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false); // loading state for template save
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   // Authentication check
   useEffect(() => {
@@ -87,13 +87,15 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     setActiveModal({ type, data, nodeId: id });
   }, []);
 
+  // ✅ Sửa: Thêm kiểu cho tham số
   const onDeleteNode = useCallback((id: string) => {
-    setNodes((nds) => nds.filter((node) => node.id !== id));
-    setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id));
+    setNodes((nds: Node[]) => nds.filter((node) => node.id !== id));
+    setEdges((eds: Edge[]) => eds.filter((edge) => edge.source !== id && edge.target !== id));
   }, []);
 
+  // ✅ Sửa: Thêm kiểu cho tham số
   const onSaveNodeConfig = useCallback((nodeId: string, newData: any) => {
-    setNodes((nds) =>
+    setNodes((nds: Node[]) =>
       nds.map((node) =>
         node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node
       )
@@ -107,8 +109,8 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     trigger: SchedulerNode,
   }), []);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
     const nodesChanged = JSON.stringify(nodes) !== JSON.stringify(initialNodes);
@@ -129,7 +131,6 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     } else if (workflowIdParam) {
       loadWorkflow(parseInt(workflowIdParam));
     } else if (newTemplate) {
-      // Reset to empty workflow for new template
       const defaultNodes: Node[] = [
         { id: 'start-node', type: 'start', position: { x: 50, y: 200 }, data: { label: 'Start', onNodeClick, onDelete: onDeleteNode } },
         { id: 'end-node', type: 'end', position: { x: 900, y: 200 }, data: { label: 'End', onNodeClick, onDelete: onDeleteNode } },
@@ -146,7 +147,6 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
       setTemplateStatus('Active');
       setIsEditingTemplate(false);
     } else {
-      // Default empty workflow
       const defaultNodes: Node[] = [
         { id: 'start-node', type: 'start', position: { x: 50, y: 200 }, data: { label: 'Start', onNodeClick, onDelete: onDeleteNode } },
         { id: 'end-node', type: 'end', position: { x: 900, y: 200 }, data: { label: 'End', onNodeClick, onDelete: onDeleteNode } },
@@ -173,7 +173,6 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
         setEdges(workflowData.edges || []);
         setInitialEdges(workflowData.edges || []);
         setWorkflowName(data.Title);
-        // Fill template form
         setTemplateTitle(data.Title);
         setTemplateDescription(data.Description || '');
         setTemplateImageUrl(data.ImageUrl || '');
@@ -349,7 +348,6 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     });
   };
 
-  // Template saving for admin (toast thay vì alert)
   const handleSaveTemplate = async () => {
     if (!isAdmin) {
       toast.error('Chỉ admin mới có quyền lưu template');
@@ -394,14 +392,12 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
       if (res.ok) {
         toast.success(isEditingTemplate ? 'Cập nhật template thành công' : 'Lưu template thành công');
         if (!isEditingTemplate) {
-          // Reset form for new template
           setTemplateTitle('');
           setTemplateDescription('');
           setTemplateImageUrl('');
           setTemplateCategory('');
           setTemplateStatus('Active');
         } else {
-          // Optionally redirect to admin page
           navigate('/admin?tab=templates');
         }
       } else {
@@ -415,8 +411,9 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     }
   };
 
+  // ✅ Sửa: Thêm kiểu cho tham số
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    (params: Connection) => setEdges((eds: Edge[]) => addEdge(params, eds)),
     [setEdges]
   );
 
@@ -432,6 +429,7 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
+  // ✅ Sửa: Thêm kiểu cho tham số
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -465,7 +463,7 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
         },
       };
 
-      setNodes((nds) => nds.concat(newNode));
+      setNodes((nds: Node[]) => nds.concat(newNode));
     },
     [reactFlowInstance, setNodes, onNodeClick, onDeleteNode]
   );
@@ -509,7 +507,6 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
         </div>
       </header>
 
-      {/* Template form for admin */}
       {isAdmin && (
         <div className="bg-white p-4 border-b border-slate-200 shadow-sm flex flex-wrap gap-3 items-center">
           <input
@@ -610,7 +607,6 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
         </div>
       </div>
 
-      {/* Modals */}
       {activeModal?.type === 'action' && activeModal.data.label === 'LLM' ? (
         <LlmModal
           isOpen={!!activeModal}

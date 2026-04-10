@@ -12,7 +12,7 @@ interface FileParserModalProps {
 
 interface TestResultItem {
   fileName: string;
-  data: string;
+  text: string;  // ✅ Đã sửa từ 'data' thành 'text'
 }
 
 interface UploadResult {
@@ -289,7 +289,7 @@ export default function FileParserModal({ isOpen, onClose, data, nodeId, onSave 
                 {testResult.map((item, idx) => (
                   <div key={idx} className="mb-2">
                     <p className="font-semibold">{item.fileName}</p>
-                    <p>{item.text}</p>
+                    <p>{item.text}</p>  {/* ✅ Đã sửa từ item.data thành item.text */}
                   </div>
                 ))}
               </div>
