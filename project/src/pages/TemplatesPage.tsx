@@ -25,7 +25,7 @@ export default function TemplatesPage({ isAuthenticated }: TemplatesPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const templatesPerPage = 9; // Số template mỗi trang
+  const templatesPerPage = 9; 
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -54,18 +54,15 @@ export default function TemplatesPage({ isAuthenticated }: TemplatesPageProps) {
     navigate(`/builder?templateId=${templateId}`);
   };
 
-  // Lọc theo từ khóa
   const filteredTemplates = templates.filter(template =>
     template.Title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     template.Description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Reset về trang 1 khi tìm kiếm
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Tính toán phân trang
   const indexOfLastTemplate = currentPage * templatesPerPage;
   const indexOfFirstTemplate = indexOfLastTemplate - templatesPerPage;
   const currentTemplates = filteredTemplates.slice(indexOfFirstTemplate, indexOfLastTemplate);

@@ -6,7 +6,6 @@ import { generateText } from "../services/geminiService.ts";
 const router = express.Router();
 router.use(authenticateToken);
 
-// GET /api/chat/sessions
 router.get("/sessions", async (req: any, res) => {
     try {
         const userId = req.user.userId;
@@ -23,7 +22,6 @@ router.get("/sessions", async (req: any, res) => {
     }
 });
 
-// POST /api/chat/sessions
 router.post("/sessions", async (req: any, res) => {
     try {
         const userId = req.user.userId;
@@ -51,7 +49,6 @@ router.post("/sessions", async (req: any, res) => {
     }
 });
 
-// PUT /api/chat/sessions/:sessionId
 router.put("/sessions/:sessionId", async (req: any, res) => {
     try {
         const userId = req.user.userId;
@@ -65,7 +62,6 @@ router.put("/sessions/:sessionId", async (req: any, res) => {
             .query(`SELECT SessionId FROM ChatSessions WHERE SessionId = @sessionId AND UserId = @userId`);
         if (check.recordset.length === 0) return res.status(404).json({ message: "Session not found" });
 
-        // Lấy dữ liệu hiện tại để merge
         const current = await db.request()
             .input("sessionId", sql.UniqueIdentifier, sessionId)
             .query(`SELECT Title, Description, SystemPrompt, Model, UserFullName, UserBirthYear, UserJob 
@@ -106,7 +102,6 @@ router.put("/sessions/:sessionId", async (req: any, res) => {
     }
 });
 
-// DELETE /api/chat/sessions/:sessionId
 router.delete("/sessions/:sessionId", async (req: any, res) => {
     try {
         const userId = req.user.userId;
@@ -132,7 +127,6 @@ router.delete("/sessions/:sessionId", async (req: any, res) => {
     }
 });
 
-// GET /api/chat/sessions/:sessionId/messages
 router.get("/sessions/:sessionId/messages", async (req: any, res) => {
     try {
         const userId = req.user.userId;
@@ -155,7 +149,6 @@ router.get("/sessions/:sessionId/messages", async (req: any, res) => {
     }
 });
 
-// POST /api/chat/sessions/:sessionId/messages
 router.post("/sessions/:sessionId/messages", async (req: any, res) => {
     try {
         const userId = req.user.userId;
@@ -165,7 +158,6 @@ router.post("/sessions/:sessionId/messages", async (req: any, res) => {
 
         const db = await getDbConnection();
 
-        // Lấy session info: SystemPrompt, Model, và thông tin người dùng
         const sessionCheck = await db.request()
             .input("sessionId", sql.UniqueIdentifier, sessionId)
             .input("userId", sql.Int, userId)
@@ -174,7 +166,6 @@ router.post("/sessions/:sessionId/messages", async (req: any, res) => {
         if (sessionCheck.recordset.length === 0) return res.status(404).json({ message: "Session not found" });
         const { SystemPrompt: systemPrompt, Model: model, UserFullName, UserBirthYear, UserJob } = sessionCheck.recordset[0];
 
-        // Đếm số tin nhắn user (giới hạn 100)
         const countResult = await db.request()
             .input("sessionId", sql.UniqueIdentifier, sessionId)
             .query(`SELECT COUNT(*) as count FROM ChatMessages WHERE SessionId = @sessionId AND Role = 'user'`);
@@ -183,22 +174,18 @@ router.post("/sessions/:sessionId/messages", async (req: any, res) => {
             return res.status(400).json({ message: "Đã đạt giới hạn 100 câu hỏi. Vui lòng tạo cuộc trò chuyện mới." });
         }
 
-        // Lưu tin nhắn user
         await db.request()
             .input("sessionId", sql.UniqueIdentifier, sessionId)
             .input("role", sql.NVarChar, "user")
             .input("content", sql.NVarChar, message)
             .query(`INSERT INTO ChatMessages (SessionId, Role, Content) VALUES (@sessionId, @role, @content)`);
 
-        // Lấy lịch sử gần nhất (tối đa 10 tin nhắn)
         const history = await db.request()
             .input("sessionId", sql.UniqueIdentifier, sessionId)
             .query(`SELECT TOP 10 Role, Content FROM ChatMessages WHERE SessionId = @sessionId ORDER BY CreatedAt DESC`);
         const messages = history.recordset.reverse();
 
-        // Xây dựng prompt
         let fullPrompt = "";
-        // Thêm thông tin người dùng nếu có
         if (UserFullName) {
             fullPrompt += `Thông tin người dùng: Tên: ${UserFullName}`;
             if (UserBirthYear) fullPrompt += `, Năm sinh: ${UserBirthYear}`;
@@ -212,10 +199,8 @@ router.post("/sessions/:sessionId/messages", async (req: any, res) => {
             fullPrompt += `${msg.Role === "user" ? "User" : "Assistant"}: ${msg.Content}\n`;
         }
 
-        // Gọi Gemini với model từ session
         const responseText = await generateText(fullPrompt, model || "gemini-2.5-flash", 0.2, 8192);
 
-        // Lưu phản hồi assistant
         await db.request()
             .input("sessionId", sql.UniqueIdentifier, sessionId)
             .input("role", sql.NVarChar, "assistant")

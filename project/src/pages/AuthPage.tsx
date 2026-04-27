@@ -14,7 +14,6 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form State
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -23,7 +22,6 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     address: ''
   });
 
-  // Xử lý token từ Google OAuth callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');

@@ -12,7 +12,7 @@ interface Workflow {
   WorkflowName: string;
   totalRuns: number;
   lastRunAt: string | null;
-  hasSchedule: number; // 0 hoặc 1
+  hasSchedule: number; 
 }
 
 export default function MyWorkflowsPage() {
@@ -23,7 +23,6 @@ export default function MyWorkflowsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [stoppingId, setStoppingId] = useState<number | null>(null);
   
-  // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -96,7 +95,7 @@ export default function MyWorkflowsPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Stop schedule failed');
-      await fetchWorkflows(); // Refresh danh sách
+      await fetchWorkflows(); 
       toast.success('Đã tắt lịch chạy tự động thành công!');
     } catch (err: any) {
       toast.error('Lỗi: ' + err.message);
@@ -105,7 +104,6 @@ export default function MyWorkflowsPage() {
     }
   };
 
-  // Mở modal xác nhận xóa
   const openDeleteConfirm = (workflow: Workflow) => {
     setConfirmModal({
       isOpen: true,
@@ -121,7 +119,6 @@ export default function MyWorkflowsPage() {
     });
   };
 
-  // Mở modal xác nhận tắt lịch
   const openStopScheduleConfirm = (workflow: Workflow) => {
     setConfirmModal({
       isOpen: true,

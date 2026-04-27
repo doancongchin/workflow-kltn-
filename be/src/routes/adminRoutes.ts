@@ -7,7 +7,6 @@ const router = express.Router();
 
 router.use(authenticateToken, checkAdmin);
 
-// GET /api/admin/users - danh sách user (phân trang)
 router.get("/users", async (req: any, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -16,8 +15,6 @@ router.get("/users", async (req: any, res) => {
     const search = req.query.search || '';
 
     const db = await getDbConnection();
-
-    // Đếm tổng
     const countResult = await db.request()
       .input("search", sql.NVarChar, `%${search}%`)
       .query(`
@@ -25,8 +22,6 @@ router.get("/users", async (req: any, res) => {
         WHERE (FullName LIKE @search OR Email LIKE @search)
       `);
     const total = countResult.recordset[0].total;
-
-    // Lấy danh sách kèm số workflow
     const users = await db.request()
       .input("search", sql.NVarChar, `%${search}%`)
       .input("offset", sql.Int, offset)
@@ -57,7 +52,6 @@ router.get("/workflows", async (req: any, res) => {
 
     const db = await getDbConnection();
 
-    // Xây dựng mảng điều kiện WHERE
     const whereConditions = [];
     if (search) {
       whereConditions.push(`(w.WorkflowName LIKE @search OR u.FullName LIKE @search OR u.Email LIKE @search)`);
@@ -67,14 +61,12 @@ router.get("/workflows", async (req: any, res) => {
     }
     const whereClause = whereConditions.length ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-    // Câu đếm tổng
     const countQuery = `
       SELECT COUNT(*) as total FROM Workflows w
       LEFT JOIN Users u ON w.UserId = u.UserId
       ${whereClause}
     `;
 
-    // Câu lấy danh sách
     const listQuery = `
       SELECT w.WorkflowId, w.WorkflowName, w.Description, w.CreatedAt, w.UpdatedAt,
              u.UserId, u.FullName, u.Email, u.Role,
@@ -106,12 +98,10 @@ router.get("/workflows", async (req: any, res) => {
   }
 });
 
-// DELETE /api/admin/workflows/:id - xóa workflow (cascade)
 router.delete("/workflows/:id", async (req: any, res) => {
   try {
     const workflowId = req.params.id;
     const db = await getDbConnection();
-    // Xóa sẽ cascade nhờ ON DELETE CASCADE
     await db.request()
       .input("id", sql.Int, workflowId)
       .query("DELETE FROM Workflows WHERE WorkflowId = @id");
@@ -122,27 +112,21 @@ router.delete("/workflows/:id", async (req: any, res) => {
   }
 });
 
-// POST /api/admin/users - tạo user mới (admin)
 router.post("/users", async (req: any, res) => {
   try {
     const { fullName, email, password, role, isActive } = req.body;
     if (!fullName || !email || !password) {
       return res.status(400).json({ message: "Thiếu thông tin bắt buộc" });
     }
-
     const db = await getDbConnection();
-
-    // Kiểm tra email đã tồn tại
     const check = await db.request()
       .input("email", sql.NVarChar, email)
       .query("SELECT UserId FROM Users WHERE Email = @email");
     if (check.recordset.length > 0) {
       return res.status(400).json({ message: "Email đã tồn tại" });
     }
-
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-
     await db.request()
       .input("fullName", sql.NVarChar, fullName)
       .input("email", sql.NVarChar, email)
@@ -153,7 +137,6 @@ router.post("/users", async (req: any, res) => {
         INSERT INTO Users (FullName, Email, PasswordHash, Role, IsActive, CreatedAt)
         VALUES (@fullName, @email, @passwordHash, @role, @isActive, GETDATE())
       `);
-
     res.json({ message: "User created successfully" });
   } catch (err: any) {
     console.error("🔥 Lỗi tạo user:", err);
@@ -161,15 +144,12 @@ router.post("/users", async (req: any, res) => {
   }
 });
 
-// PUT /api/admin/users/:id - cập nhật user
 router.put("/users/:id", async (req: any, res) => {
   try {
     const userId = req.params.id;
     const { fullName, email, role, isActive } = req.body;
 
     const db = await getDbConnection();
-
-    // Kiểm tra user tồn tại
     const check = await db.request()
       .input("id", sql.Int, userId)
       .query("SELECT UserId FROM Users WHERE UserId = @id");
@@ -177,7 +157,6 @@ router.put("/users/:id", async (req: any, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Cập nhật
     await db.request()
       .input("id", sql.Int, userId)
       .input("fullName", sql.NVarChar, fullName)
@@ -197,12 +176,10 @@ router.put("/users/:id", async (req: any, res) => {
   }
 });
 
-// DELETE /api/admin/users/:id - xóa user
 router.delete("/users/:id", async (req: any, res) => {
   try {
     const userId = req.params.id;
 
-    // Không cho xóa chính mình
     if (parseInt(userId) === req.user.userId) {
       return res.status(400).json({ message: "Cannot delete yourself" });
     }
@@ -219,7 +196,6 @@ router.delete("/users/:id", async (req: any, res) => {
   }
 });
 
-// POST /api/admin/users/:id/reset-password - đặt lại mật khẩu
 router.post("/users/:id/reset-password", async (req: any, res) => {
   try {
     const userId = req.params.id;
@@ -276,7 +252,6 @@ router.get("/templates", async (req: any, res) => {
   }
 });
 
-// POST /api/admin/templates - tạo template mới (giữ lại bản có OUTPUT)
 router.post("/templates", async (req: any, res) => {
   try {
     const { title, description, status, steps, imageUrl, category, workflowData } = req.body;
@@ -309,7 +284,6 @@ router.post("/templates", async (req: any, res) => {
   }
 });
 
-// PUT /api/admin/templates/:id - sửa template
 router.put("/templates/:id", async (req: any, res) => {
   try {
     const templateId = req.params.id;
@@ -340,7 +314,6 @@ router.put("/templates/:id", async (req: any, res) => {
   }
 });
 
-// DELETE /api/admin/templates/:id - xóa template
 router.delete("/templates/:id", async (req: any, res) => {
   try {
     const templateId = req.params.id;
@@ -356,19 +329,13 @@ router.delete("/templates/:id", async (req: any, res) => {
   }
 });
 
-// ==================== STATISTICS ====================
 router.get("/stats", async (req: any, res) => {
   try {
     const db = await getDbConnection();
 
-    // Tổng user
     const userCount = await db.request().query("SELECT COUNT(*) as total FROM Users");
-    // Tổng workflow
     const workflowCount = await db.request().query("SELECT COUNT(*) as total FROM Workflows");
-    // Tổng lần chạy
     const executionCount = await db.request().query("SELECT COUNT(*) as total FROM WorkflowExecutions");
-
-    // Top 5 user theo số workflow
     const topUsers = await db.request().query(`
       SELECT TOP 5 u.UserId, u.FullName, u.Email, COUNT(w.WorkflowId) as WorkflowCount
       FROM Users u

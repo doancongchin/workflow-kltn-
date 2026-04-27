@@ -87,7 +87,7 @@ export default function ChatInterface({ sessionId, onClearHistory }: ChatInterfa
       const res = await fetch(`/api/chat/sessions/${sessionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ model: newModel }) // chỉ gửi model, các trường khác giữ nguyên
+        body: JSON.stringify({ model: newModel }) 
       });
       if (res.ok) {
         setSelectedModel(newModel);

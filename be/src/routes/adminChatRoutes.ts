@@ -6,7 +6,6 @@ const router = express.Router();
 
 router.use(authenticateToken, checkAdmin);
 
-// GET /api/admin/chat/users-with-sessions - lấy danh sách user có session
 router.get("/users", async (req: any, res) => {
   try {
     const db = await getDbConnection();
@@ -24,7 +23,6 @@ router.get("/users", async (req: any, res) => {
   }
 });
 
-// GET /api/admin/chat/sessions/:userId - lấy danh sách session của user
 router.get("/sessions/:userId", async (req: any, res) => {
   try {
     const userId = req.params.userId;
@@ -44,17 +42,13 @@ router.get("/sessions/:userId", async (req: any, res) => {
   }
 });
 
-// DELETE /api/admin/chat/session/:sessionId - xóa session
 router.delete("/sessions/:sessionId", async (req: any, res) => {
   try {
     const sessionId = req.params.sessionId;
     const db = await getDbConnection();
-
-    // Chỉ cần xóa ở ChatSessions, ChatMessages sẽ tự động bị xóa nhờ Cascade
     const result = await db.request()
       .input("sessionId", sql.UniqueIdentifier, sessionId)
       .query(`DELETE FROM ChatSessions WHERE SessionId = @sessionId`);
-
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ message: "Không tìm thấy session để xóa" });
     }

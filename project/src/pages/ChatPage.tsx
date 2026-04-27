@@ -19,7 +19,6 @@ export default function ChatPage({ isAuthenticated }: ChatPageProps) {
     setSelectedSessionId(sessionId);
   };
 
-  // Nếu chưa đăng nhập, hiển thị modal và không cho chat
   if (!isAuthenticated) {
     return (
       <>

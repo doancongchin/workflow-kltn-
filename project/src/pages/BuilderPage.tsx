@@ -54,14 +54,12 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeModal, setActiveModal] = useState<{ type: string; data: any; nodeId: string } | null>(null);
 
-  // Template editing for admin
   const [searchParams] = useSearchParams();
   const editTemplateId = searchParams.get('editTemplateId');
   const newTemplate = searchParams.get('newTemplate');
   const role = localStorage.getItem('role');
   const isAdmin = role === 'admin';
 
-  // Template form state (only for admin)
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
   const [templateImageUrl, setTemplateImageUrl] = useState('');
@@ -70,7 +68,6 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
 
-  // Authentication check
   useEffect(() => {
     if (isAuthenticated) setShowLoginModal(false);
   }, [isAuthenticated]);
@@ -87,13 +84,11 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     setActiveModal({ type, data, nodeId: id });
   }, []);
 
-  // ✅ Sửa: Thêm kiểu cho tham số
   const onDeleteNode = useCallback((id: string) => {
     setNodes((nds: Node[]) => nds.filter((node) => node.id !== id));
     setEdges((eds: Edge[]) => eds.filter((edge) => edge.source !== id && edge.target !== id));
   }, []);
 
-  // ✅ Sửa: Thêm kiểu cho tham số
   const onSaveNodeConfig = useCallback((nodeId: string, newData: any) => {
     setNodes((nds: Node[]) =>
       nds.map((node) =>
@@ -118,7 +113,6 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     setIsDirty(nodesChanged || edgesChanged);
   }, [nodes, edges, initialNodes, initialEdges]);
 
-  // Load data based on URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const templateId = params.get('templateId');
@@ -411,7 +405,6 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     }
   };
 
-  // ✅ Sửa: Thêm kiểu cho tham số
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds: Edge[]) => addEdge(params, eds)),
     [setEdges]
@@ -429,7 +422,6 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  // ✅ Sửa: Thêm kiểu cho tham số
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();

@@ -1,4 +1,3 @@
-// src/pages/AdminPage.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Layout, BarChart3, UserPlus, Edit, Trash2, Lock, Unlock, Key, Plus,
@@ -76,12 +75,10 @@ export default function AdminPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
 
-  // Workflows specific pagination
   const [workflowPage, setWorkflowPage] = useState(1);
   const [workflowTotalPages, setWorkflowTotalPages] = useState(1);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
-  // Chat specific state
   const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
   const [selectedChatUserId, setSelectedChatUserId] = useState<number | null>(null);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -89,12 +86,10 @@ export default function AdminPage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
-  // User modal
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState({ fullName: '', email: '', password: '', role: 'user', isActive: true });
 
-  // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -111,7 +106,6 @@ export default function AdminPage() {
     onConfirm: () => {},
   });
 
-  // Reset password modal
   const [resetPasswordModal, setResetPasswordModal] = useState<{
     isOpen: boolean;
     userId: number | null;
@@ -128,7 +122,6 @@ export default function AdminPage() {
 
   const navigate = useNavigate();
 
-  // ---------- Users ----------
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -314,7 +307,6 @@ export default function AdminPage() {
     setShowUserModal(true);
   };
 
-  // ---------- Templates ----------
   const fetchTemplates = async () => {
     setLoading(true);
     try {
@@ -367,7 +359,6 @@ export default function AdminPage() {
     navigate(`/builder?editTemplateId=${templateId}`);
   };
 
-  // ---------- Workflows ----------
   const fetchWorkflows = async () => {
     setLoading(true);
     try {
@@ -416,7 +407,6 @@ export default function AdminPage() {
     });
   };
 
-  // ---------- Stats ----------
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -433,7 +423,6 @@ export default function AdminPage() {
     }
   };
 
-  // ---------- Chat ----------
   const fetchChatUsers = async () => {
     setLoadingChatUsers(true);
     try {
@@ -513,7 +502,6 @@ export default function AdminPage() {
     }
   }, [activeTab]);
 
-  // ---------- Effects ----------
   useEffect(() => {
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'templates') fetchTemplates();

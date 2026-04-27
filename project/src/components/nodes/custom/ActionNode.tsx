@@ -2,12 +2,10 @@ import React from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Trash2, LucideIcon, Bot, Brain, FileText, Clock } from 'lucide-react';
 
-// Mapping từ tên icon (string) sang component
 const iconMap: Record<string, LucideIcon> = {
   'AI Agent': Bot,
   'LLM': Brain,
   'File Parser': FileText,
-  // Thêm các node khác nếu có
   'Bot': Bot,
   'Brain': Brain,
   'FileText': FileText,
@@ -17,7 +15,7 @@ const iconMap: Record<string, LucideIcon> = {
 interface ActionNodeData {
   label: string;
   description: string;
-  icon?: string | LucideIcon; // Có thể là string hoặc component (dự phòng)
+  icon?: string | LucideIcon;
   iconColor?: string;
   tags?: string[];
   onNodeClick?: (id: string, type: string, data: any) => void;
@@ -27,12 +25,11 @@ interface ActionNodeData {
 export default function ActionNode({ data, id }: NodeProps) {
   const nodeData = data as unknown as ActionNodeData;
   
-  // Xác định icon: ưu tiên string -> map, nếu không thì dùng label fallback
   let IconComponent: LucideIcon | undefined;
   if (typeof nodeData.icon === 'string') {
     IconComponent = iconMap[nodeData.icon] || iconMap[nodeData.label];
   } else if (nodeData.icon && typeof nodeData.icon === 'function') {
-    IconComponent = nodeData.icon; // fallback cho dữ liệu cũ (component)
+    IconComponent = nodeData.icon;
   } else {
     IconComponent = iconMap[nodeData.label];
   }

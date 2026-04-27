@@ -139,7 +139,6 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// OAuth callback endpoint - sửa để đóng popup và gửi message về parent
 router.get("/callback", async (req, res) => {
   console.log("🔥 Callback reached with code and state");
   try {
@@ -149,10 +148,8 @@ router.get("/callback", async (req, res) => {
     }
 
     const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
-    const { userId, toolId, toolName } = stateData; // lấy toolName từ state
+    const { userId, toolId, toolName } = stateData; 
     const db = await getDbConnection();
-
-    // Lấy tool info
     const tool = await db.request()
       .input("toolId", sql.Int, toolId)
       .query(`SELECT * FROM Tools WHERE ToolId = @toolId`);
@@ -161,7 +158,6 @@ router.get("/callback", async (req, res) => {
     }
     const toolData = tool.recordset[0];
 
-    // Lấy cấu hình (ưu tiên user config)
     const userConfig = await db.request()
       .input("userId", sql.Int, userId)
       .input("toolId", sql.Int, toolId)
@@ -182,7 +178,6 @@ router.get("/callback", async (req, res) => {
 
     const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/callback`;
 
-    // Trao đổi code lấy token
     const tokenResponse = await axios.post(tokenUrl, {
       client_id: clientId,
       client_secret: clientSecret,
@@ -194,7 +189,6 @@ router.get("/callback", async (req, res) => {
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
     const expiresAt = new Date(Date.now() + expires_in * 1000);
 
-    // Lưu token vào UserToolAuth
     await db.request()
       .input("userId", sql.Int, userId)
       .input("toolId", sql.Int, toolId)
@@ -211,7 +205,6 @@ router.get("/callback", async (req, res) => {
           INSERT (UserId, ToolId, AccessToken, RefreshToken, ExpiresAt) VALUES (@userId, @toolId, @accessToken, @refreshToken, @expiresAt);
       `);
 
-    // Thành công: gửi HTML với postMessage và đóng popup
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     res.send(`
       <!DOCTYPE html>
@@ -228,9 +221,7 @@ router.get("/callback", async (req, res) => {
     `);
   } catch (err: any) {
     console.error("🔥 Lỗi OAuth callback:", err);
-    // Lỗi: gửi message thất bại về parent
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    // Lấy toolName từ state nếu có (đã parse ở trên), nhưng nếu lỗi xảy ra trước khi parse state thì dùng fallback
     let toolName = 'unknown';
     try {
       const state = req.query.state as string;
@@ -255,7 +246,6 @@ router.get("/callback", async (req, res) => {
   }
 });
 
-// Endpoint tạo OAuth URL cho tool
 router.get("/:toolName", async (req: any, res) => {
   try {
     const token = req.query.token as string;
@@ -298,7 +288,6 @@ router.get("/:toolName", async (req: any, res) => {
         return res.status(400).json({ message: "Missing client credentials. Please configure the tool first." });
       }
 
-      // Tạo state có chứa userId, toolId và toolName
       const state = Buffer.from(JSON.stringify({ userId, toolId: toolData.ToolId, toolName })).toString('base64');
       const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/callback`;
       const authUrlObj = new URL(authUrl);

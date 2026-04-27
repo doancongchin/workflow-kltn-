@@ -20,7 +20,6 @@ if (!fs.existsSync(nodeFilesDir)) {
   fs.mkdirSync(nodeFilesDir, { recursive: true });
 }
 
-// Upload nhiều file (tối đa 10)
 router.post('/upload-node-files', authenticateToken, upload.array('files', 10), async (req: any, res) => {
   try {
     const files = req.files;
@@ -41,7 +40,6 @@ router.post('/upload-node-files', authenticateToken, upload.array('files', 10), 
   }
 });
 
-// Upload một file (giữ nguyên cho tương thích ngược)
 router.post('/upload-node-file', authenticateToken, upload.single('file'), async (req: any, res) => {
   try {
     const file = req.file;
@@ -58,7 +56,6 @@ router.post('/upload-node-file', authenticateToken, upload.single('file'), async
   }
 });
 
-// Hàm trích xuất text từ buffer theo định dạng
 async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<string> {
   if (ext === '.pdf') {
     const pdfData = await pdfParse(buffer);
@@ -88,7 +85,6 @@ async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<strin
   }
 }
 
-// Endpoint test parser – trả về text thay vì JSON
 router.post('/parser', authenticateToken, upload.array('files', 10), async (req: any, res) => {
   try {
     const files = req.files;
@@ -115,11 +111,9 @@ router.post('/parser', authenticateToken, upload.array('files', 10), async (req:
 
       const fullPrompt = `${prompt}\n\nNội dung file:\n${text}`;
 
-      // Gọi Gemini
       const responseText = await generateText(fullPrompt, model, 0.2, 8192);
       console.log('📝 Raw AI response:', responseText);
 
-      // Trả về text trực tiếp
       results.push({ fileName: file.originalname, text: responseText });
     }
 

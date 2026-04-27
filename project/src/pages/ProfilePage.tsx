@@ -53,7 +53,6 @@ export default function ProfilePage({ isAuthenticated }: ProfilePageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
-  // Tool config modal
   const [showToolModal, setShowToolModal] = useState(false);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [toolConfig, setToolConfig] = useState({
@@ -81,15 +80,13 @@ export default function ProfilePage({ isAuthenticated }: ProfilePageProps) {
     confirmPassword: ''
   });
 
-  // Lắng nghe message từ OAuth popup
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Kiểm tra nguồn (có thể thêm event.origin để bảo mật)
       const data = event.data;
       if (data?.type === 'oauth') {
         if (data.success) {
           toast.success(`Kết nối ${data.toolName || 'tool'} thành công!`);
-          fetchTools(); // Refresh danh sách tools
+          fetchTools(); 
         } else {
           toast.error(`Kết nối thất bại: ${data.error || 'Lỗi không xác định'}`);
         }
@@ -282,7 +279,6 @@ export default function ProfilePage({ isAuthenticated }: ProfilePageProps) {
     }
   };
 
-  // Sửa handleConnectTool - không cần setInterval nữa
   const handleConnectTool = (toolName: string) => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -290,7 +286,6 @@ export default function ProfilePage({ isAuthenticated }: ProfilePageProps) {
       return;
     }
 
-    // Đóng modal cấu hình nếu đang mở
     setShowToolModal(false);
 
     const width = 600;

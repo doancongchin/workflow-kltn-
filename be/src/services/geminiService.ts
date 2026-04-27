@@ -15,13 +15,13 @@ const FALLBACK_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
 async function callGeminiWithRetry(
   url: string,
   payload: any,
-  maxRetries: number = 2,        // giảm số lần retry
-  initialDelay: number = 500      // giảm delay ban đầu
+  maxRetries: number = 2,        
+  initialDelay: number = 500     
 ): Promise<any> {
   let lastError: any;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const response = await axios.post(url, payload, { timeout: 15000 }); // timeout 15s
+      const response = await axios.post(url, payload, { timeout: 15000 }); 
       return response;
     } catch (error: any) {
       lastError = error;
@@ -42,7 +42,7 @@ export async function generateText(
   prompt: string,
   model: string = 'gemini-2.5-flash',
   temperature: number = 0.2,
-  maxOutputTokens: number = 8192   // giảm từ 30000
+  maxOutputTokens: number = 8192  
 ): Promise<string> {
   let currentModel = model;
   let lastError: any;
@@ -63,7 +63,6 @@ export async function generateText(
     } catch (error: any) {
       lastError = error;
       const status = error.response?.status;
-      // Nếu là lỗi 5xx hoặc 429, thử model dự phòng
       if ((status === 429 || (status >= 500 && status < 600)) && attempt < FALLBACK_MODELS.length) {
         currentModel = FALLBACK_MODELS[attempt];
         console.log(`🔄 Switching to fallback model: ${currentModel}`);

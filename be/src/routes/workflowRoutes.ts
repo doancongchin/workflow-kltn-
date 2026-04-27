@@ -1,4 +1,4 @@
-// workflowRoutes.ts
+
 import express from "express";
 import axios from "axios";
 import { getDbConnection, sql } from "../lib/db.ts";
@@ -10,7 +10,6 @@ import { generateText } from "../services/geminiService.ts";
 
 const router = express.Router();
 
-// Save workflow
 router.post("/save", authenticateToken, async (req: any, res) => {
   const { name, nodes, edges, workflowId } = req.body;
   const userId = req.user.userId;
@@ -32,7 +31,6 @@ router.post("/save", authenticateToken, async (req: any, res) => {
         activeWfId = wf.recordset[0].WorkflowId;
       }
 
-      // Xóa các bảng liên quan
       await transaction.request()
         .input("wfId", sql.Int, activeWfId)
         .query(`DELETE FROM ExecutionSteps WHERE WorkflowId = @wfId`);
@@ -49,7 +47,6 @@ router.post("/save", authenticateToken, async (req: any, res) => {
         .input("wfId", sql.Int, activeWfId)
         .query(`DELETE FROM Nodes WHERE WorkflowId = @wfId`);
 
-      // Insert nodes mới
       for (const node of nodes) {
         await transaction.request()
           .input("nodeId", sql.NVarChar, node.id)
@@ -65,7 +62,6 @@ router.post("/save", authenticateToken, async (req: any, res) => {
           `);
       }
 
-      // Insert edges mới
       for (const edge of edges) {
         const request = transaction.request()
           .input("edgeId", sql.NVarChar, edge.id)
@@ -84,10 +80,8 @@ router.post("/save", authenticateToken, async (req: any, res) => {
 
       await transaction.commit();
 
-      // Xử lý scheduler node – tắt lịch nếu không còn node Scheduler
       const schedulerNodes = nodes.filter((n: any) => n.data.label === 'Scheduler');
       if (schedulerNodes.length === 0) {
-        // Không có node Scheduler => hủy lịch (nếu có)
         await unregisterScheduledWorkflow(activeWfId);
       } else {
         for (const schedulerNode of schedulerNodes) {
@@ -112,7 +106,6 @@ router.post("/save", authenticateToken, async (req: any, res) => {
   }
 });
 
-// Load workflow by id
 router.get("/:id", authenticateToken, async (req: any, res) => {
   try {
     const workflowId = req.params.id;
@@ -144,16 +137,14 @@ router.get("/:id", authenticateToken, async (req: any, res) => {
   }
 });
 
-// Run workflow
 router.post("/run/:workflowId", authenticateToken, async (req: any, res) => {
   const workflowId = req.params.workflowId;
-  const userId = req.user.userId; // có thể là null đối với system token
+  const userId = req.user.userId; 
   try {
     const db = await getDbConnection();
     const transaction = new sql.Transaction(db);
     await transaction.begin();
     try {
-      // Lấy userId thực của chủ workflow nếu là system token
       let effectiveUserId = userId;
       if (userId === null) {
         const wfOwner = await transaction.request()
@@ -166,7 +157,6 @@ router.post("/run/:workflowId", authenticateToken, async (req: any, res) => {
         effectiveUserId = wfOwner.recordset[0].UserId;
       }
 
-      // Kiểm tra quyền (nếu không phải system token)
       if (userId !== null) {
         const wfCheck = await transaction.request()
           .input("wfId", sql.Int, workflowId)
@@ -285,7 +275,6 @@ router.post("/run/:workflowId", authenticateToken, async (req: any, res) => {
   }
 });
 
-// Tắt lịch tự động cho workflow
 router.post("/stop-schedule/:workflowId", authenticateToken, async (req: any, res) => {
   const workflowId = req.params.workflowId;
   const userId = req.user.userId;
@@ -306,7 +295,6 @@ router.post("/stop-schedule/:workflowId", authenticateToken, async (req: any, re
   }
 });
 
-// Delete workflow
 router.delete("/:id", authenticateToken, async (req: any, res) => {
   const workflowId = req.params.id;
   const userId = req.user.userId;
@@ -357,7 +345,6 @@ router.delete("/:id", authenticateToken, async (req: any, res) => {
   }
 });
 
-// LLM execute (test)
 router.post("/execute-llm", authenticateToken, async (req, res) => {
   try {
     const { prompt, model = "gemini-2.5-flash" } = req.body;

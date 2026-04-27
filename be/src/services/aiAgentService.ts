@@ -3,6 +3,15 @@ import { sql } from "../lib/db.ts";
 import json5 from 'json5';
 import { generateText } from "./geminiService.ts";
 
+function logWithTime(level: string, message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
+  console.log(prefix, message);
+  if (data !== undefined) {
+    console.log(prefix, 'Data:', typeof data === 'object' ? JSON.stringify(data, null, 2) : data);
+  }
+}
+
 function getToolListDescription(selectedTools: number[]): string {
   const tools = [];
   if (selectedTools.includes(1)) {
@@ -71,13 +80,13 @@ function replaceVariables(text: string, nodeOutputs: Record<string, any>, contex
 
     const nodeOutput = nodeOutputs[nodeId];
     if (nodeOutput === undefined) {
-      console.warn(`⚠️ Node output not found for id: ${nodeId}`);
+      logWithTime('warn', `Node output not found for id: ${nodeId}`);
       return match;
     }
     if (field) {
       const value = nodeOutput[field];
       if (value === undefined) {
-        console.warn(`⚠️ Field '${field}' not found in node ${nodeId}`);
+        logWithTime('warn', `Field '${field}' not found in node ${nodeId}`);
         return match;
       }
       return typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -105,17 +114,16 @@ export async function processAIAgent(
   userId: number,
   nodeOutputs: Record<string, any>
 ) {
+  logWithTime('info', ` AI Agent bắt đầu xử lý. UserId: ${userId}`);
+
   const config = node.DataConfig ? JSON.parse(node.DataConfig) : {};
   let systemPrompt = config.systemPrompt || '';
   const selectedTools = config.selectedTools || [];
 
-  console.log("📦 nodeOutputs trong AI Agent (keys):", Object.keys(nodeOutputs));
-  Object.entries(nodeOutputs).forEach(([id, out]) => {
-    console.log(`  - Node ${id}:`, Object.keys(out));
-  });
+  logWithTime('debug', `Selected tools: ${selectedTools.join(', ')}`);
 
   systemPrompt = replaceVariables(systemPrompt, nodeOutputs);
-  console.log("📦 systemPrompt sau khi thay thế:", systemPrompt);
+  logWithTime('info', ` System Prompt sau thay thế:\n${systemPrompt}`);
 
   let fullPrompt = systemPrompt;
   if (inputData) {
@@ -125,6 +133,7 @@ export async function processAIAgent(
       fullPrompt += `\n\nDữ liệu đầu vào: ${JSON.stringify(inputData)}`;
     }
   }
+  logWithTime('info', ` Full Prompt gửi Gemini (lần 1):\n${fullPrompt.substring(0, 500)}...`);
 
   let responseText = await generateText(
     fullPrompt,
@@ -132,40 +141,46 @@ export async function processAIAgent(
     config.temperature || 0.1,
     8192
   );
-  console.log("🤖 AI response (lần 1):", responseText);
+  logWithTime('info', ` Gemini response (lần 1):\n${responseText}`);
 
   if (selectedTools.length === 0) {
+    logWithTime('warn', 'Không có tool nào được chọn, trả về text thuần.');
     return { text: responseText };
   }
 
   let cmd = extractJson(responseText);
   if (cmd && !isValidCommand(cmd)) {
-    console.log("⚠️ Phát hiện JSON không phải command hợp lệ, vẫn chuyển đổi...");
+    logWithTime('warn', ' Lần 1 trả về JSON nhưng không hợp lệ, sẽ thử chuyển đổi.');
     cmd = null;
   }
 
   if (!cmd) {
-    console.log("🔄 Không tìm thấy JSON command hợp lệ, thử chuyển đổi ngôn ngữ tự nhiên...");
+    logWithTime('info', ' Lần 1 không có JSON hợp lệ, chuyển sang chế độ chuyển đổi ngôn ngữ tự nhiên (lần 2).');
     const toolList = getToolListDescription(selectedTools);
     const conversionPrompt = `Yêu cầu của người dùng: "${responseText}"\n\nHãy chuyển yêu cầu trên thành một JSON command để thực thi bằng các tool có sẵn. Bạn BẮT BUỘC phải dùng cấu trúc JSON sau:\n${toolList}\n\nChỉ trả về JSON hợp lệ, không thêm text giải thích, markdown hay bất kỳ văn bản nào khác.`;
+    logWithTime('info', ` Conversion prompt gửi Gemini (lần 2):\n${conversionPrompt.substring(0, 500)}...`);
+    
     const jsonResponse = await generateText(conversionPrompt, config.model || 'gemini-2.5-flash', 0.1, 8192);
-    console.log("🤖 JSON response (lần 2):", jsonResponse);
+    logWithTime('info', ` Gemini response (lần 2):\n${jsonResponse}`);
+    
     cmd = extractJson(jsonResponse);
     if (!cmd) {
-      console.error("❌ Vẫn không thể trích xuất JSON từ response");
+      logWithTime('error', ' Vẫn không thể trích xuất JSON từ response lần 2.');
       return { text: responseText };
     }
     if (!isValidCommand(cmd)) {
-      console.error("❌ JSON không phải command hợp lệ sau khi chuyển đổi");
+      logWithTime('error', ' JSON lần 2 không phải command hợp lệ.');
       return { text: responseText };
     }
+    logWithTime('success', ' Đã chuyển đổi thành công sang JSON command.');
+  } else {
+    logWithTime('success', ' Lần 1 đã trả về JSON command hợp lệ.');
   }
 
-  console.log("📦 cmd sau khi parse:", cmd);
+  logWithTime('info', `📦 JSON command nhận được:\n${JSON.stringify(cmd, null, 2)}`);
 
-  // Xử lý trường hợp có key 'actions' (mảng)
   if (cmd.actions && Array.isArray(cmd.actions)) {
-    console.log("📦 Phát hiện actions array, sẽ xử lý tuần tự");
+    logWithTime('info', `📦 Phát hiện actions array (${cmd.actions.length} action), xử lý tuần tự.`);
     let context: Record<string, any> = {};
     let finalResult: any = null;
     for (let i = 0; i < cmd.actions.length; i++) {
@@ -176,18 +191,22 @@ export async function processAIAgent(
         }
         return value;
       });
+      logWithTime('info', ` Thực thi action ${i+1}/${cmd.actions.length}: ${JSON.stringify(processedItem)}`);
       let result = await executeSingleCommand(processedItem, selectedTools, transaction, userId, responseText, context, inputData);
       if (result && result.context) {
         context = { ...context, ...result.context };
       }
       finalResult = result;
-      if (result && result.error) break;
+      if (result && result.error) {
+        logWithTime('error', `Dừng tại action ${i+1} do lỗi: ${result.error}`);
+        break;
+      }
     }
     return finalResult;
   }
 
-  // Xử lý nếu cmd là array
   if (Array.isArray(cmd)) {
+    logWithTime('info', `📦 Phát hiện mảng command (${cmd.length} lệnh), xử lý tuần tự.`);
     let context: Record<string, any> = {};
     let finalResult: any = null;
     for (let i = 0; i < cmd.length; i++) {
@@ -198,12 +217,16 @@ export async function processAIAgent(
         }
         return value;
       });
+      logWithTime('info', ` Thực thi lệnh ${i+1}/${cmd.length}: ${JSON.stringify(processedItem)}`);
       let result = await executeSingleCommand(processedItem, selectedTools, transaction, userId, responseText, context, inputData);
       if (result && result.context) {
         context = { ...context, ...result.context };
       }
       finalResult = result;
-      if (result && result.error) break;
+      if (result && result.error) {
+        logWithTime('error', ` Dừng tại lệnh ${i+1} do lỗi: ${result.error}`);
+        break;
+      }
     }
     return finalResult;
   } else {
@@ -220,7 +243,6 @@ async function executeSingleCommand(
   context: Record<string, any>,
   inputData?: any
 ) {
-  // Normalize command parameters
   if (cmd.command && cmd.parameters) {
     cmd.action = cmd.command;
     Object.assign(cmd, cmd.parameters);
@@ -229,8 +251,11 @@ async function executeSingleCommand(
     cmd.action = cmd.tool;
     Object.assign(cmd, cmd.parameters);
   }
+  if (cmd.tool_code && cmd.tool_args) {
+    cmd.action = cmd.tool_code;
+    Object.assign(cmd, cmd.tool_args);
+  }
 
-  // ========== Chuẩn hóa action ==========
   const rawActionStr = (cmd.action || cmd.tool_code || '').toLowerCase();
   if (rawActionStr.includes('search') || rawActionStr.includes('tìm')) {
     cmd.action = 'search_emails';
@@ -244,14 +269,12 @@ async function executeSingleCommand(
     cmd.action = 'read_sheet';
   }
 
-  // Map email fields
   if (cmd.recipient && !cmd.to) cmd.to = cmd.recipient;
   if (cmd.send_to && !cmd.to) cmd.to = cmd.send_to;
   if (cmd.email_to && !cmd.to) cmd.to = cmd.email_to;
   if (cmd.email && !cmd.to) cmd.to = cmd.email;
   if (cmd.title && !cmd.subject) cmd.subject = cmd.title;
 
-  // Suy luận action nếu chưa có (Fallback cuối cùng)
   if (!cmd.action) {
     if (cmd.to || cmd.subject || cmd.body) cmd.action = 'send_email';
     else if (cmd.query || cmd.from || cmd.days || cmd.search) cmd.action = 'search_emails';
@@ -271,7 +294,7 @@ async function executeSingleCommand(
     let { AccessToken, RefreshToken, ExpiresAt } = tokenRes.recordset[0];
     const now = new Date();
     if (new Date(ExpiresAt) <= now) {
-      console.log(`🔄 Token expired for tool ${toolId}, refreshing...`);
+      logWithTime('info', `🔄 Token expired for tool ${toolId}, refreshing...`);
       if (!RefreshToken) throw new Error('No refresh token available');
       const configRes = await transaction.request()
         .input("userId", sql.Int, userId)
@@ -296,40 +319,51 @@ async function executeSingleCommand(
           UPDATE UserToolAuth SET AccessToken = @accessToken, ExpiresAt = @expiresAt, UpdatedAt = GETDATE()
           WHERE UserId = @userId AND ToolId = @toolId
         `);
-      console.log(`✅ Token refreshed for tool ${toolId}`);
+      logWithTime('success', `Token refreshed for tool ${toolId}`);
     }
     return { AccessToken, RefreshToken };
   };
 
-  // ========== GMAIL ==========
   if (selectedTools.includes(1)) {
     if (cmd.action === 'send_email') {
       try {
+        logWithTime('info', `Bắt đầu xử lý lệnh gửi email.`);
+        logWithTime('debug', `Recipient raw: ${cmd.to}, Subject: ${cmd.subject}`);
+
         if (!cmd.to || cmd.to === 'người dùng hiện tại' || cmd.to.includes('người dùng')) {
+          logWithTime('error', `Invalid recipient: ${cmd.to}`);
           return { error: 'Invalid recipient', text: responseText };
         }
         if (cmd.to.includes('@gmail.inbox')) cmd.to = cmd.to.replace('.inbox', '.com');
+        logWithTime('info', ` Địa chỉ người nhận sau chuẩn hóa: ${cmd.to}`);
 
-        console.log("🔄 Đang refresh token cho Gmail...");
+        logWithTime('info', ` Đang refresh token cho Gmail (nếu cần)...`);
         const tokenInfo = await refreshTokenIfNeeded(1);
-        if (!tokenInfo) return { error: 'Gmail not connected', text: responseText };
+        if (!tokenInfo) {
+          logWithTime('error', `Gmail chưa được kết nối hoặc token không tồn tại.`);
+          return { error: 'Gmail not connected', text: responseText };
+        }
         const { AccessToken } = tokenInfo;
+        logWithTime('success', `Lấy AccessToken thành công.`);
 
         const userRes = await transaction.request()
           .input("userId", sql.Int, userId)
           .query(`SELECT Email FROM Users WHERE UserId = @userId`);
         const userEmail = userRes.recordset[0]?.Email;
-        if (!userEmail) return { error: 'User email not found', text: responseText };
-        console.log(`📧 Email người gửi: ${userEmail}`);
+        if (!userEmail) {
+          logWithTime('error', `Không tìm thấy email của người dùng (UserId: ${userId})`);
+          return { error: 'User email not found', text: responseText };
+        }
+        logWithTime('info', ` Email người gửi: ${userEmail}`);
 
         const subject = cmd.subject || 'Workflow Notification';
         const encodedSubject = `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`;
-
         let body = cmd.body || '';
         body = body.replace(/\{\{([^}]+)\}\}/g, (match: string, key: string) => {
           if (context[key] !== undefined) return context[key];
           return match;
         });
+        logWithTime('debug', `Nội dung email sau thay thế: ${body.substring(0, 200)}...`);
 
         const emailContent = [
           `From: ${userEmail}`,
@@ -345,21 +379,21 @@ async function executeSingleCommand(
           .replace(/\//g, '_')
           .replace(/=+$/, '');
 
-        console.log("📤 Đang gửi email tới:", cmd.to);
+        logWithTime('info', `📤 Đang gửi email tới: ${cmd.to} qua Gmail API...`);
         const response = await axios.post(
           'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
           { raw: encodedEmail },
           { headers: { 'Authorization': `Bearer ${AccessToken}`, 'Content-Type': 'application/json' } }
         );
-        console.log("✅ Gmail API response:", response.data);
+        logWithTime('success', `Gmail API thành công. MessageId: ${response.data.id}, ThreadId: ${response.data.threadId}`);
         return { success: true, message: 'Email sent', text: `Đã gửi email đến ${cmd.to}` };
       } catch (apiErr: any) {
-        console.error("❌ Gmail API error:", apiErr.response?.data || apiErr.message);
+        logWithTime('error', `Gmail API thất bại: ${apiErr.response?.data?.error?.message || apiErr.message}`);
         return { error: apiErr.response?.data?.error?.message || apiErr.message, text: responseText };
       }
     } else if (cmd.action === 'search_emails') {
       try {
-        console.log("🔍 Searching emails...");
+        logWithTime('info', ` Tìm kiếm email với query: ${cmd.query || cmd.search || ''}`);
         const tokenInfo = await refreshTokenIfNeeded(1);
         if (!tokenInfo) return { error: 'Gmail not connected', text: responseText };
         const { AccessToken } = tokenInfo;
@@ -378,7 +412,10 @@ async function executeSingleCommand(
         );
 
         const messages = listRes.data.messages || [];
-        if (messages.length === 0) return { success: true, emails: [], message: 'No emails found', text: 'Không tìm thấy email nào' };
+        if (messages.length === 0) {
+          logWithTime('warn', `Không tìm thấy email nào.`);
+          return { success: true, emails: [], message: 'No emails found', text: 'Không tìm thấy email nào' };
+        }
 
         const emailDetails = await Promise.all(
           messages.map(async (msg: any) => {
@@ -403,15 +440,15 @@ async function executeSingleCommand(
             return { id: msg.id, from, subject, date, body: body.substring(0, 500) };
           })
         );
+        logWithTime('success', ` Tìm thấy ${emailDetails.length} email.`);
         return { success: true, emails: emailDetails, count: emailDetails.length, text: `Tìm thấy ${emailDetails.length} email` };
       } catch (apiErr: any) {
-        console.error("❌ Gmail search API error:", apiErr.response?.data || apiErr.message);
+        logWithTime('error', `Gmail search API error: ${apiErr.response?.data?.error?.message || apiErr.message}`);
         return { error: apiErr.response?.data?.error?.message || apiErr.message, text: responseText };
       }
     }
   }
 
-  // ========== GOOGLE SHEETS ==========
   if (selectedTools.includes(2)) {
     try {
       const tokenInfo = await refreshTokenIfNeeded(2);
@@ -430,11 +467,12 @@ async function executeSingleCommand(
         }
         if (!spreadsheetId) return { error: 'Missing spreadsheetId', text: responseText };
         const range = cmd.range || 'Sheet1';
-        console.log(`📖 Đang đọc sheet ${spreadsheetId}, range: ${range}`);
+        logWithTime('info', `📖 Đang đọc sheet ${spreadsheetId}, range: ${range}`);
         const sheetsRes = await axios.get(
           `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`,
           { headers: { 'Authorization': `Bearer ${AccessToken}` } }
         );
+        logWithTime('success', `Đọc sheet thành công, ${sheetsRes.data.values?.length || 0} dòng.`);
         return { success: true, data: sheetsRes.data.values, text: `Đã đọc sheet thành công` };
       }
 
@@ -443,7 +481,7 @@ async function executeSingleCommand(
         if (!spreadsheetId && context && context.last_sheet_id) spreadsheetId = context.last_sheet_id;
         if (!spreadsheetId && (cmd.sheet_name || cmd.title)) {
           const sheetTitle = cmd.sheet_name || cmd.title || 'New Spreadsheet';
-          console.log(`🔧 Không có spreadsheetId, sẽ tạo sheet mới với tên: ${sheetTitle}`);
+          logWithTime('info', `🔧 Không có spreadsheetId, sẽ tạo sheet mới với tên: ${sheetTitle}`);
           const createRes = await axios.post(
             'https://sheets.googleapis.com/v4/spreadsheets',
             { properties: { title: sheetTitle } },
@@ -451,17 +489,16 @@ async function executeSingleCommand(
           );
           spreadsheetId = createRes.data.spreadsheetId;
           const newSheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
-          console.log(`✅ Đã tạo sheet mới ID: ${spreadsheetId}`);
+          logWithTime('success', `Đã tạo sheet mới ID: ${spreadsheetId}`);
           context.last_sheet_id = spreadsheetId;
           context.spreadsheetUrl = newSheetUrl;
         }
         if (!spreadsheetId) return { error: 'Missing spreadsheetId', text: responseText };
         
         let range = cmd.range || 'A1';
-        // Nếu range có dạng "SheetName!A1", lấy phần sau dấu !
         if (range.includes('!')) {
           const parts = range.split('!');
-          range = parts[parts.length - 1]; // lấy phần A1
+          range = parts[parts.length - 1];
         }
         
         let values = cmd.values || cmd.data;
@@ -475,6 +512,7 @@ async function executeSingleCommand(
           { values },
           { headers: { 'Authorization': `Bearer ${AccessToken}`, 'Content-Type': 'application/json' } }
         );
+        logWithTime('success', `dã ghi ${values.length} dòng vào sheet ${spreadsheetId}, range ${range}`);
         return { success: true, spreadsheetId, text: `Đã ghi dữ liệu vào sheet ${range}` };
       }
       if (cmd.action === 'create_sheet') {
@@ -488,7 +526,6 @@ async function executeSingleCommand(
         context.last_sheet_id = spreadsheetId;
         context.spreadsheetUrl = spreadsheetUrl;
 
-        // Nếu có dữ liệu ban đầu (initialData) thì ghi luôn
         let initialData = cmd.initialData || cmd.values || cmd.data;
         if (initialData) {
           if (!Array.isArray(initialData)) initialData = [[String(initialData)]];
@@ -499,12 +536,14 @@ async function executeSingleCommand(
             { values: initialData },
             { headers: { 'Authorization': `Bearer ${AccessToken}`, 'Content-Type': 'application/json' } }
           );
+          logWithTime('success', `Tạo sheet và ghi dữ liệu ban đầu thành công: ${spreadsheetUrl}`);
           return { success: true, spreadsheetId, spreadsheetUrl, message: 'Sheet created with initial data', text: `Đã tạo sheet và ghi dữ liệu vào ${range}` };
         }
+        logWithTime('success', `Tạo sheet trống thành công: ${spreadsheetUrl}`);
         return { success: true, spreadsheetId, spreadsheetUrl, message: 'Sheet created', text: `Đã tạo sheet mới: ${spreadsheetUrl}`, context: { last_sheet_id: spreadsheetId, spreadsheetUrl } };
       }
     } catch (apiErr: any) {
-      console.error("❌ Sheets API error:", apiErr.response?.data || apiErr.message);
+      logWithTime('error', `Sheets API error: ${apiErr.response?.data?.error?.message || apiErr.message}`);
       return { error: apiErr.response?.data?.error?.message || apiErr.message, text: responseText };
     }
   }

@@ -77,7 +77,6 @@ export async function parseFile(
 }
 
 async function processFiles(files: { fileName: string; text: string; buffer: Buffer }[], config: any) {
-  // Prompt mặc định không yêu cầu JSON
   const prompt = config.systemPrompt || 'Đọc nội dung file và trả về thông tin cần thiết.';
 
   const results = [];
@@ -92,14 +91,14 @@ async function processFiles(files: { fileName: string; text: string; buffer: Buf
 
     results.push({
       fileName: file.fileName,
-      text: responseText,          // Kết quả AI (text)
-      rawText: file.text           // Nội dung gốc file
+      text: responseText,          
+      rawText: file.text       
     });
   }
 
   if (files.length === 1) {
     return {
-      file: results[0].text,       // Để tương thích với cách dùng cũ
+      file: results[0].text,      
       fileName: results[0].fileName,
       text: results[0].rawText
     };

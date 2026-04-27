@@ -12,7 +12,7 @@ interface FileParserModalProps {
 
 interface TestResultItem {
   fileName: string;
-  text: string;  // ✅ Đã sửa từ 'data' thành 'text'
+  text: string; 
 }
 
 interface UploadResult {

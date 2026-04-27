@@ -5,12 +5,11 @@ let transporter: nodemailer.Transporter | null = null;
 let sendgridEnabled = false;
 
 async function initEmailService() {
-  // 1. Ưu tiên SMTP Gmail (nếu có cấu hình)
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true', // false cho port 587, true cho 465
+      secure: process.env.SMTP_SECURE === 'true', 
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -20,7 +19,6 @@ async function initEmailService() {
     return;
   }
 
-  // 2. Thử dùng SendGrid (nếu có API key hợp lệ)
   const sgApiKey = process.env.SENDGRID_API_KEY;
   if (sgApiKey && sgApiKey.startsWith('SG.')) {
     sgMail.setApiKey(sgApiKey);
@@ -29,7 +27,6 @@ async function initEmailService() {
     return;
   }
 
-  // 3. Fallback: Ethereal (test)
   const testAccount = await nodemailer.createTestAccount();
   transporter = nodemailer.createTransport({
     host: testAccount.smtp.host,
@@ -48,7 +45,6 @@ export async function sendResetPasswordEmail(to: string, resetLink: string): Pro
 
   const fromEmail = process.env.FROM_EMAIL || 'noreply@workflow.local';
 
-  // Dùng SendGrid
   if (sendgridEnabled) {
     const msg = {
       to,
@@ -67,7 +63,6 @@ export async function sendResetPasswordEmail(to: string, resetLink: string): Pro
     return;
   }
 
-  // Dùng SMTP hoặc Ethereal
   if (!transporter) {
     await initEmailService();
   }

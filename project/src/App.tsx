@@ -45,7 +45,7 @@ export default function App() {
         <Sidebar isAuthenticated={isAuthenticated} onLogout={handleLogout} />
         <main className="flex-1 ml-64 min-h-screen relative">
           <Routes>
-            <Route path="/" element={<DashboardPage isAuthenticated={isAuthenticated} />} />
+            <Route path="/" element={<DashboardPage />} />
             <Route path="/builder" element={<BuilderPage isAuthenticated={isAuthenticated}  />} />
             <Route path="/templates" element={<TemplatesPage isAuthenticated={isAuthenticated} />} />
             <Route path="/profile" element={<ProfilePage isAuthenticated={isAuthenticated} />} />
