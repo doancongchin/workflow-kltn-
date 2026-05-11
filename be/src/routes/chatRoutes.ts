@@ -150,68 +150,89 @@ router.get("/sessions/:sessionId/messages", async (req: any, res) => {
 });
 
 router.post("/sessions/:sessionId/messages", async (req: any, res) => {
-    try {
-        const userId = req.user.userId;
-        const sessionId = req.params.sessionId;
-        const { message } = req.body;
-        if (!message) return res.status(400).json({ message: "Message required" });
+  try {
+    const userId = req.user.userId;
+    const sessionId = req.params.sessionId;
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ message: "Message required" });
 
-        const db = await getDbConnection();
+    const db = await getDbConnection();
 
-        const sessionCheck = await db.request()
-            .input("sessionId", sql.UniqueIdentifier, sessionId)
-            .input("userId", sql.Int, userId)
-            .query(`SELECT SessionId, SystemPrompt, Model, UserFullName, UserBirthYear, UserJob 
-                    FROM ChatSessions WHERE SessionId = @sessionId AND UserId = @userId`);
-        if (sessionCheck.recordset.length === 0) return res.status(404).json({ message: "Session not found" });
-        const { SystemPrompt: systemPrompt, Model: model, UserFullName, UserBirthYear, UserJob } = sessionCheck.recordset[0];
+    const sessionCheck = await db.request()
+      .input("sessionId", sql.UniqueIdentifier, sessionId)
+      .input("userId", sql.Int, userId)
+      .query(`SELECT SessionId, SystemPrompt, Model, UserFullName, UserBirthYear, UserJob 
+              FROM ChatSessions WHERE SessionId = @sessionId AND UserId = @userId`);
+    if (sessionCheck.recordset.length === 0) return res.status(404).json({ message: "Session not found" });
+    const { SystemPrompt: systemPrompt, Model: model, UserFullName, UserBirthYear, UserJob } = sessionCheck.recordset[0];
 
-        const countResult = await db.request()
-            .input("sessionId", sql.UniqueIdentifier, sessionId)
-            .query(`SELECT COUNT(*) as count FROM ChatMessages WHERE SessionId = @sessionId AND Role = 'user'`);
-        const userMsgCount = countResult.recordset[0].count;
-        if (userMsgCount >= 100) {
-            return res.status(400).json({ message: "Đã đạt giới hạn 100 câu hỏi. Vui lòng tạo cuộc trò chuyện mới." });
-        }
-
-        await db.request()
-            .input("sessionId", sql.UniqueIdentifier, sessionId)
-            .input("role", sql.NVarChar, "user")
-            .input("content", sql.NVarChar, message)
-            .query(`INSERT INTO ChatMessages (SessionId, Role, Content) VALUES (@sessionId, @role, @content)`);
-
-        const history = await db.request()
-            .input("sessionId", sql.UniqueIdentifier, sessionId)
-            .query(`SELECT TOP 10 Role, Content FROM ChatMessages WHERE SessionId = @sessionId ORDER BY CreatedAt DESC`);
-        const messages = history.recordset.reverse();
-
-        let fullPrompt = "";
-        if (UserFullName) {
-            fullPrompt += `Thông tin người dùng: Tên: ${UserFullName}`;
-            if (UserBirthYear) fullPrompt += `, Năm sinh: ${UserBirthYear}`;
-            if (UserJob) fullPrompt += `, Nghề nghiệp: ${UserJob}`;
-            fullPrompt += "\n\n";
-        }
-        if (systemPrompt) {
-            fullPrompt += `System: ${systemPrompt}\n\n`;
-        }
-        for (const msg of messages) {
-            fullPrompt += `${msg.Role === "user" ? "User" : "Assistant"}: ${msg.Content}\n`;
-        }
-
-        const responseText = await generateText(fullPrompt, model || "gemini-2.5-flash", 0.2, 8192);
-
-        await db.request()
-            .input("sessionId", sql.UniqueIdentifier, sessionId)
-            .input("role", sql.NVarChar, "assistant")
-            .input("content", sql.NVarChar, responseText)
-            .query(`INSERT INTO ChatMessages (SessionId, Role, Content) VALUES (@sessionId, @role, @content)`);
-
-        res.json({ response: responseText });
-    } catch (err: any) {
-        console.error("Lỗi xử lý tin nhắn chat:", err);
-        res.status(500).json({ message: "server error" });
+    // Giới hạn số lượng tin nhắn user
+    const countResult = await db.request()
+      .input("sessionId", sql.UniqueIdentifier, sessionId)
+      .query(`SELECT COUNT(*) as count FROM ChatMessages WHERE SessionId = @sessionId AND Role = 'user'`);
+    if (countResult.recordset[0].count >= 100) {
+      return res.status(400).json({ message: "Đã đạt giới hạn 100 câu hỏi. Vui lòng tạo cuộc trò chuyện mới." });
     }
+
+    // Lưu tin nhắn user
+    await db.request()
+      .input("sessionId", sql.UniqueIdentifier, sessionId)
+      .input("role", sql.NVarChar, "user")
+      .input("content", sql.NVarChar, message)
+      .query(`INSERT INTO ChatMessages (SessionId, Role, Content) VALUES (@sessionId, @role, @content)`);
+
+    // Lấy tối đa 6 tin nhắn gần nhất (thay vì 10)
+    const history = await db.request()
+      .input("sessionId", sql.UniqueIdentifier, sessionId)
+      .query(`SELECT TOP 6 Role, Content FROM ChatMessages WHERE SessionId = @sessionId ORDER BY CreatedAt DESC`);
+    const messages = history.recordset.reverse();
+
+    // Hàm cắt ngắn và làm sạch
+    const clean = (text: string, maxLen: number = 300) => {
+      let cleaned = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+      if (cleaned.length > maxLen) cleaned = cleaned.substring(0, maxLen) + '…';
+      return cleaned;
+    };
+
+    let fullPrompt = "";
+    if (UserFullName) {
+      fullPrompt += `Thông tin người dùng: Tên: ${UserFullName}`;
+      if (UserBirthYear) fullPrompt += `, Năm sinh: ${UserBirthYear}`;
+      if (UserJob) fullPrompt += `, Nghề nghiệp: ${UserJob}`;
+      fullPrompt += "\n\n";
+    }
+    if (systemPrompt) {
+      fullPrompt += `System: ${systemPrompt}\n\n`;
+    }
+    for (const msg of messages) {
+      const role = msg.Role === "user" ? "User" : "Assistant";
+      fullPrompt += `${role}: ${clean(msg.Content)}\n`;
+    }
+    // Giới hạn tổng độ dài prompt
+    if (fullPrompt.length > 3500) fullPrompt = fullPrompt.substring(0, 3500) + "\n...[prompt bị cắt]";
+
+    const responseText = await generateText(
+      fullPrompt,
+      model || "gemini-2.5-flash-lite",
+      0.2,
+      1024  // giảm mạnh output token
+    );
+
+    await db.request()
+      .input("sessionId", sql.UniqueIdentifier, sessionId)
+      .input("role", sql.NVarChar, "assistant")
+      .input("content", sql.NVarChar, responseText)
+      .query(`INSERT INTO ChatMessages (SessionId, Role, Content) VALUES (@sessionId, @role, @content)`);
+
+    res.json({ response: responseText });
+  } catch (err: any) {
+    // Log chi tiết lỗi 400
+    if (err.response?.status === 400) {
+      console.error("Gemini 400 error details:", JSON.stringify(err.response.data, null, 2));
+    }
+    console.error("Lỗi xử lý tin nhắn chat:", err);
+    res.status(500).json({ message: "server error" });
+  }
 });
 
 export default router;

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { 
+import {
   Clock, Zap, Bot, Brain, Play, Edit3, MoreHorizontal, Plus, Loader2
 } from 'lucide-react';
 import { FileText } from 'lucide-react';
@@ -32,6 +32,7 @@ import SchedulerModal from '../components/nodes/modals/SchedulerModal';
 
 let idCounter = 10;
 const getId = () => `${idCounter++}`;
+const TEMP_STORAGE_KEY = 'builder_temp_workflow';
 
 export default function BuilderPage({ isAuthenticated }: { isAuthenticated: boolean }) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -104,8 +105,8 @@ export default function BuilderPage({ isAuthenticated }: { isAuthenticated: bool
     trigger: SchedulerNode,
   }), []);
 
-const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
     const nodesChanged = JSON.stringify(nodes) !== JSON.stringify(initialNodes);
@@ -114,17 +115,71 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   }, [nodes, edges, initialNodes, initialEdges]);
 
   useEffect(() => {
+    if (isDirty && !workflowId && nodes.length > 0) {
+      const tempData = {
+        nodes: nodes.map(n => ({ ...n, data: { ...n.data, onNodeClick: undefined, onDelete: undefined } })),
+        edges,
+        workflowName,
+      };
+      localStorage.setItem(TEMP_STORAGE_KEY, JSON.stringify(tempData));
+    }
+  }, [nodes, edges, workflowName, isDirty, workflowId]);
+
+  const setDefaultNodes = () => {
+    const defaultNodes: Node[] = [
+      { id: 'start-node', type: 'start', position: { x: 50, y: 200 }, data: { label: 'Start', onNodeClick, onDelete: onDeleteNode } },
+      { id: 'end-node', type: 'end', position: { x: 900, y: 200 }, data: { label: 'End', onNodeClick, onDelete: onDeleteNode } },
+    ];
+    setNodes(defaultNodes);
+    setInitialNodes(defaultNodes);
+    setEdges([]);
+    setInitialEdges([]);
+    setWorkflowName('Untitled Workflow');
+  };
+
+  const resetToNewWorkflow = () => {
+    if (isDirty) {
+      if (!confirm('Bạn có thay đổi chưa lưu. Tiếp tục sẽ mất dữ liệu. Bạn có chắc?')) {
+        return;
+      }
+    }
+    localStorage.removeItem(TEMP_STORAGE_KEY);
+    setWorkflowId(null);
+    setWorkflowName('New Workflow');
+    const defaultNodes: Node[] = [
+      { id: 'start-node', type: 'start', position: { x: 50, y: 200 }, data: { label: 'Start', onNodeClick, onDelete: onDeleteNode } },
+      { id: 'end-node', type: 'end', position: { x: 900, y: 200 }, data: { label: 'End', onNodeClick, onDelete: onDeleteNode } },
+    ];
+    setNodes(defaultNodes);
+    setInitialNodes(defaultNodes);
+    setEdges([]);
+    setInitialEdges([]);
+    setIsDirty(false);
+    setTemplateTitle('');
+    setTemplateDescription('');
+    setTemplateImageUrl('');
+    setTemplateCategory('');
+    setTemplateStatus('Active');
+    setIsEditingTemplate(false);
+    toast.success('Đã tạo workflow mới', { duration: 1500 });
+  };
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const templateId = params.get('templateId');
     const workflowIdParam = params.get('workflowId');
 
     if (editTemplateId) {
+      localStorage.removeItem(TEMP_STORAGE_KEY);
       loadTemplateForEdit(parseInt(editTemplateId));
     } else if (templateId) {
+      localStorage.removeItem(TEMP_STORAGE_KEY);
       loadTemplate(parseInt(templateId));
     } else if (workflowIdParam) {
+      localStorage.removeItem(TEMP_STORAGE_KEY);
       loadWorkflow(parseInt(workflowIdParam));
     } else if (newTemplate) {
+      localStorage.removeItem(TEMP_STORAGE_KEY);
       const defaultNodes: Node[] = [
         { id: 'start-node', type: 'start', position: { x: 50, y: 200 }, data: { label: 'Start', onNodeClick, onDelete: onDeleteNode } },
         { id: 'end-node', type: 'end', position: { x: 900, y: 200 }, data: { label: 'End', onNodeClick, onDelete: onDeleteNode } },
@@ -141,14 +196,27 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
       setTemplateStatus('Active');
       setIsEditingTemplate(false);
     } else {
-      const defaultNodes: Node[] = [
-        { id: 'start-node', type: 'start', position: { x: 50, y: 200 }, data: { label: 'Start', onNodeClick, onDelete: onDeleteNode } },
-        { id: 'end-node', type: 'end', position: { x: 900, y: 200 }, data: { label: 'End', onNodeClick, onDelete: onDeleteNode } },
-      ];
-      setNodes(defaultNodes);
-      setInitialNodes(defaultNodes);
-      setEdges([]);
-      setInitialEdges([]);
+      const saved = localStorage.getItem(TEMP_STORAGE_KEY);
+      if (saved) {
+        try {
+          const { nodes: savedNodes, edges: savedEdges, workflowName: savedName } = JSON.parse(saved);
+          const restoredNodes = savedNodes.map((node: any) => ({
+            ...node,
+            data: { ...node.data, onNodeClick, onDelete: onDeleteNode },
+          }));
+          setNodes(restoredNodes);
+          setInitialNodes(restoredNodes);
+          setEdges(savedEdges);
+          setInitialEdges(savedEdges);
+          setWorkflowName(savedName || 'Untitled Workflow');
+          setIsDirty(true);
+        } catch (err) {
+          console.error('Failed to restore temp workflow', err);
+          setDefaultNodes();
+        }
+      } else {
+        setDefaultNodes();
+      }
     }
   }, []);
 
@@ -222,7 +290,7 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
           id: n.NodeId,
           type: n.NodeType,
           position: { x: n.PosX, y: n.PosY },
-          data: { 
+          data: {
             ...JSON.parse(n.DataConfig || '{}'),
             onNodeClick,
             onDelete: onDeleteNode,
@@ -257,7 +325,7 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
       setSaving(true);
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:3001/api/workflow/save', { 
+        const response = await fetch('http://localhost:3001/api/workflow/save', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -282,6 +350,7 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
           setInitialNodes(nodes);
           setInitialEdges(edges);
           setIsDirty(false);
+          localStorage.removeItem(TEMP_STORAGE_KEY);
           toast.success('Đã lưu Workflow thành công!', { duration: 2000 });
         } else {
           const errorData = await response.json();
@@ -441,8 +510,8 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
         id: getId(),
         type: label === 'Scheduler' ? 'trigger' : 'action',
         position,
-        data: { 
-          label: label, 
+        data: {
+          label: label,
           description: label === 'Scheduler' ? 'Run workflow on schedule' : `New ${label} Node`,
           icon: label,
           iconColor: color,
@@ -477,7 +546,7 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleSaveWorkflow}
             disabled={!isDirty || saving}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
@@ -551,7 +620,7 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
         <aside className="w-64 flex flex-col bg-white border-r border-slate-200 z-20">
           <div className="p-4 border-b border-slate-100">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Nodes</h2>
-            <p className="text-xs text-slate-400">Drag and drop components</p>
+            <p className="text-xs text-slate-400">Kéo thả các khối</p>
           </div>
           <div className="p-4 flex flex-col gap-3 overflow-y-auto">
             {[
@@ -560,7 +629,7 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
               { icon: FileText, label: 'File Parser', color: 'text-indigo-500' },
               { icon: Clock, label: 'Scheduler', color: 'text-amber-500' },
             ].map((node, i) => (
-              <div 
+              <div
                 key={i}
                 draggable
                 onDragStart={(e) => onDragStart(e, node.label, node.label, node.icon, node.color)}
@@ -573,9 +642,12 @@ const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
             ))}
           </div>
           <div className="mt-auto p-4">
-            <button className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
+            <button
+              onClick={resetToNewWorkflow}
+              className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+            >
               <Plus size={16} />
-              Custom Node
+              Tạo workflow mới
             </button>
           </div>
         </aside>
